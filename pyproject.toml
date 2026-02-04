@@ -1,0 +1,43 @@
+[project]
+name = "quanda-knowledge-base-pipeline"
+version = "0.1.0"
+description = "FastAPI 기반 파이프라인 서버 - 파일 업로드, Claude Agent 메타데이터 생성, S3 업로드 및 Bedrock KB 동기화"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "python-multipart>=0.0.18",
+    "claude-agent-sdk>=0.1.0",
+    "boto3>=1.35.0",
+    "pydantic-settings>=2.6.0",
+    "dependency-injector>=4.42.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.24.0",
+    "httpx>=0.27.0",
+    "moto[s3]>=5.0.0",
+    "ruff>=0.8.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+
+[tool.ruff]
+line-length = 120
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W"]
