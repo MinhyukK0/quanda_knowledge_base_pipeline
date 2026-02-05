@@ -19,7 +19,7 @@ class Container(containers.DeclarativeContainer):
     agent_service = providers.Singleton(
         AgentService,
         system_prompt="You are a document analysis assistant. Analyze files and extract metadata.",
-        max_turns=settings.agent_max_turns,
+        max_turns=10,
         cwd=settings.agent_cwd,
         use_bedrock=settings.claude_code_use_bedrock,
         model=settings.anthropic_model,

@@ -14,7 +14,6 @@ class AppSettings(BaseSettings):
     debug: bool = False
 
     # Agent 설정
-    agent_max_turns: int = 10
     agent_cwd: str | None = None
     claude_code_use_bedrock: bool = False
     anthropic_model: str | None = None
