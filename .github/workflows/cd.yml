@@ -111,13 +111,24 @@ jobs:
             --client-secret="${{ secrets.INFISICAL_CLIENT_SECRET }}" \
             --silent --plain)
 
-          # JSON에서 key=value 형태로 변환하여 infisical에 업데이트
-          echo "$ALL_SECRETS" | jq -r 'to_entries | .[] | select(.value != "") | "\(.key)=\(.value)"' > .env.tmp
+          # 배포/인프라 관련 시크릿 제외하고 앱 시크릿만 필터링
+          # DEPLOY_*, INFISICAL_*, SLACK_*, GITHUB_TOKEN 등 제외
+          echo "$ALL_SECRETS" | jq -r '
+            to_entries | .[] |
+            select(.value != "") |
+            select(.key | test("^(DEPLOY_|INFISICAL_|SLACK_|GITHUB_)") | not) |
+            "\(.key)=\(.value)"
+          ' > .env.tmp
 
-          infisical secrets set $(cat .env.tmp | tr '\n' ' ') \
-            --projectId ${{ secrets.INFISICAL_PROJECT_ID }} \
-            --env ${{ secrets.INFISICAL_ENV }} \
-            --path ${{ secrets.INFISICAL_PATH }}
+          # 파일이 비어있지 않은 경우에만 동기화
+          if [ -s .env.tmp ]; then
+            while IFS= read -r line; do
+              infisical secrets set "$line" \
+                --projectId ${{ secrets.INFISICAL_PROJECT_ID }} \
+                --env ${{ secrets.INFISICAL_ENV }} \
+                --path ${{ secrets.INFISICAL_PATH }}
+            done < .env.tmp
+          fi
 
           rm -f .env.tmp
 
