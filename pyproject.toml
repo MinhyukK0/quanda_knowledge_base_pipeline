@@ -1,6 +1,6 @@
 [project]
 name = "quanda-knowledge-base-pipeline"
-version = "0.1.0"
+version = "0.1.1"
 description = "FastAPI 기반 파이프라인 서버 - 파일 업로드, Claude Agent 메타데이터 생성, S3 업로드 및 Bedrock KB 동기화"
 readme = "README.md"
 requires-python = ">=3.13"
