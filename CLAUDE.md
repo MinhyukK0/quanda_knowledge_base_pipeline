@@ -84,18 +84,11 @@ AWS_SECRET_ACCESS_KEY=
 ```json
 {
   "metadataAttributes": {
-    "summary": {
-      "value": { "type": "STRING", "stringValue": "..." },
-      "includeForEmbedding": true
-    },
-    "categories": {
-      "value": { "type": "STRING", "stringValue": "카테고리1,카테고리2" },
-      "includeForEmbedding": true
-    },
-    "tags": {
-      "value": { "type": "STRING", "stringValue": "태그1,태그2" },
-      "includeForEmbedding": true
-    }
+    "summary": "문서 요약 (2-3문장)",
+    "categories": "카테고리1,카테고리2",
+    "tags": "태그1,태그2,태그3",
+    "source_type": "md",
+    "created_at": "2026-02-05T00:00:00Z"
   }
 }
 ```
@@ -155,8 +148,9 @@ docker logs quanda-kb
 - 예시: `mko/add-upload-api`, `wogus/fix-metadata-parsing`
 
 ### 릴리즈/태그
-- 형식: `x.x.x` (SemVer)
+- 형식: `x.x.x` (SemVer, `v` prefix 없음)
 - 예시: `0.1.0`, `1.0.0`, `1.2.3`
+- GitHub Release 타이틀도 동일하게 `x.x.x` 형식
 - CD 트리거: 태그 푸시 시 자동 배포
 
 ## 배포 (IRSA)
