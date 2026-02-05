@@ -8,7 +8,7 @@ on:
 
 env:
   AWS_REGION: ap-northeast-2
-  ECR_REPOSITORY: quanda-knowledge-base-pipeline
+  ECR_REPOSITORY: quanda/knowledge-base-pipeline
 
 permissions:
   id-token: write
