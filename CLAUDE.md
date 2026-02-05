@@ -148,6 +148,17 @@ make docker-run \
 docker logs quanda-kb
 ```
 
+## Git 컨벤션
+
+### 브랜치
+- 형식: `{username}/{feature}`
+- 예시: `mko/add-upload-api`, `wogus/fix-metadata-parsing`
+
+### 릴리즈/태그
+- 형식: `x.x.x` (SemVer)
+- 예시: `0.1.0`, `1.0.0`, `1.2.3`
+- CD 트리거: 태그 푸시 시 자동 배포
+
 ## 배포 (IRSA)
 
 Kubernetes 환경에서 IRSA(IAM Roles for Service Accounts)를 사용하면 AWS credentials 환경변수 없이 자동으로 인증됨:
