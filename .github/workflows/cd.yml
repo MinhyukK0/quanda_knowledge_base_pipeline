@@ -157,26 +157,26 @@ jobs:
         id: tag
         run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
 
-      - name: Update quanda-kb-pipeline image tag
-        run: make release ns=prod app=quanda-kb-pipeline tag=${{ steps.tag.outputs.VERSION }}
+      - name: Update quanda-knowledge-base-pipeline image tag
+        run: make release ns=prod app=quanda-knowledge-base-pipeline tag=${{ steps.tag.outputs.VERSION }}
 
       - name: Create Pull Request
         id: create-pr
         uses: peter-evans/create-pull-request@v5
         with:
           token: ${{ steps.app-token.outputs.token }}
-          commit-message: "chore: update quanda-kb-pipeline image to ${{ steps.tag.outputs.VERSION }}"
-          title: "chore: update quanda-kb-pipeline image to ${{ steps.tag.outputs.VERSION }}"
+          commit-message: "chore: update quanda-knowledge-base-pipeline image to ${{ steps.tag.outputs.VERSION }}"
+          title: "chore: update quanda-knowledge-base-pipeline image to ${{ steps.tag.outputs.VERSION }}"
           body: |
             ## Summary
-            - Update quanda-kb-pipeline image tag to `${{ steps.tag.outputs.VERSION }}`
+            - Update quanda-knowledge-base-pipeline image tag to `${{ steps.tag.outputs.VERSION }}`
 
             ## Triggered by
             - Repository: ${{ github.repository }}
             - Tag: ${{ github.ref_name }}
             - Actor: ${{ github.actor }}
             - Workflow: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          branch: chore/update-quanda-kb-pipeline-${{ steps.tag.outputs.VERSION }}
+          branch: chore/update-quanda-knowledge-base-pipeline-${{ steps.tag.outputs.VERSION }}
           base: main
 
       - name: Set PR URL for Slack
