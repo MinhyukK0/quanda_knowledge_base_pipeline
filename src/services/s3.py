@@ -59,41 +59,31 @@ class S3Service:
             }
 
     def _to_bedrock_metadata(self, metadata: dict, source_type: str) -> dict:
-        """메타데이터를 Bedrock KB 형식으로 변환"""
+        """메타데이터를 Bedrock KB 형식으로 변환
+
+        Bedrock KB 메타데이터 형식:
+        {
+            "metadataAttributes": {
+                "key": "string_value",  # 간단한 형식
+                "key2": {               # 타입 명시 형식
+                    "type": "STRING",
+                    "value": "string_value"
+                }
+            }
+        }
+        """
         attributes = {}
 
         for key, value in metadata.items():
             if isinstance(value, list):
                 # 배열은 쉼표로 구분된 문자열로 변환
-                attributes[key] = {
-                    "value": {"type": "STRING", "stringValue": ",".join(str(v) for v in value)},
-                    "includeForEmbedding": True,
-                }
-            elif isinstance(value, bool):
-                attributes[key] = {
-                    "value": {"type": "BOOLEAN", "booleanValue": value},
-                    "includeForEmbedding": True,
-                }
-            elif isinstance(value, (int, float)):
-                attributes[key] = {
-                    "value": {"type": "NUMBER", "numberValue": value},
-                    "includeForEmbedding": True,
-                }
+                attributes[key] = ",".join(str(v) for v in value)
             else:
-                attributes[key] = {
-                    "value": {"type": "STRING", "stringValue": str(value)},
-                    "includeForEmbedding": True,
-                }
+                attributes[key] = str(value)
 
         # source_type, created_at 추가
-        attributes["source_type"] = {
-            "value": {"type": "STRING", "stringValue": source_type},
-            "includeForEmbedding": False,
-        }
-        attributes["created_at"] = {
-            "value": {"type": "STRING", "stringValue": datetime.now(timezone.utc).isoformat()},
-            "includeForEmbedding": False,
-        }
+        attributes["source_type"] = source_type
+        attributes["created_at"] = datetime.now(timezone.utc).isoformat()
 
         return {"metadataAttributes": attributes}
 
