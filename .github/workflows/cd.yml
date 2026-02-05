@@ -1,0 +1,228 @@
+name: CD
+
+on:
+  push:
+    tags:
+      - '[0-9]+.[0-9]+.[0-9]+'
+  workflow_dispatch:
+
+env:
+  AWS_REGION: ap-northeast-2
+  ECR_REPOSITORY: quanda-knowledge-base-pipeline
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: prod
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::696201523565:role/github-cicd-role
+          aws-region: ap-northeast-2
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Extract tag name
+        id: tag
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Build and push Docker image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ steps.tag.outputs.VERSION }}
+        run: |
+          docker build \
+            -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
+            -t $ECR_REGISTRY/$ECR_REPOSITORY:latest .
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+
+      - name: Send Slack notification on failure
+        if: failure()
+        uses: slackapi/slack-github-action@v2
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
+          payload: |
+            {
+              "text": "❌ Deployment Failed",
+              "blocks": [
+                {
+                  "type": "header",
+                  "text": {
+                    "type": "plain_text",
+                    "text": "❌ Deployment Failed"
+                  }
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Repository:*\n${{ github.repository }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Tag:*\n${{ github.ref_name }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Triggered by:*\n${{ github.actor }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Workflow:*\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Run>"
+                    }
+                  ]
+                }
+              ]
+            }
+
+  sync-secrets-to-infisical:
+    needs: deploy
+    if: ${{ needs.deploy.result == 'success' }}
+    runs-on: ubuntu-latest
+    environment: prod
+
+    steps:
+      - name: Install Infisical CLI
+        run: |
+          sudo npm install -g @infisical/cli
+          infisical --version
+
+      - name: Sync secrets to Infisical
+        env:
+          INFISICAL_API_URL: ${{ secrets.INFISICAL_DOMAIN }}
+          ALL_SECRETS: ${{ toJSON(secrets) }}
+        run: |
+          # Login with Machine Identity (Universal Auth) and capture token
+          export INFISICAL_TOKEN=$(infisical login --method=universal-auth \
+            --client-id="${{ secrets.INFISICAL_CLIENT_ID }}" \
+            --client-secret="${{ secrets.INFISICAL_CLIENT_SECRET }}" \
+            --silent --plain)
+
+          # JSON에서 key=value 형태로 변환하여 infisical에 업데이트
+          echo "$ALL_SECRETS" | jq -r 'to_entries | .[] | select(.value != "") | "\(.key)=\(.value)"' > .env.tmp
+
+          infisical secrets set $(cat .env.tmp | tr '\n' ' ') \
+            --projectId ${{ secrets.INFISICAL_PROJECT_ID }} \
+            --env ${{ secrets.INFISICAL_ENV }} \
+            --path ${{ secrets.INFISICAL_PATH }}
+
+          rm -f .env.tmp
+
+  update-k8s-manifest:
+    needs: deploy
+    runs-on: ubuntu-latest
+    environment: prod
+    steps:
+      - name: Generate GitHub App Token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.DEPLOY_APP_ID }}
+          private-key: ${{ secrets.DEPLOY_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: quanda_k8s_manifest
+
+      - name: Checkout k8s manifest repository
+        uses: actions/checkout@v4
+        with:
+          repository: Quantit-Github/quanda_k8s_manifest
+          token: ${{ steps.app-token.outputs.token }}
+          ref: main
+
+      - name: Extract tag name
+        id: tag
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Update quanda-kb-pipeline image tag
+        run: make release ns=prod app=quanda-kb-pipeline tag=${{ steps.tag.outputs.VERSION }}
+
+      - name: Create Pull Request
+        id: create-pr
+        uses: peter-evans/create-pull-request@v5
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          commit-message: "chore: update quanda-kb-pipeline image to ${{ steps.tag.outputs.VERSION }}"
+          title: "chore: update quanda-kb-pipeline image to ${{ steps.tag.outputs.VERSION }}"
+          body: |
+            ## Summary
+            - Update quanda-kb-pipeline image tag to `${{ steps.tag.outputs.VERSION }}`
+
+            ## Triggered by
+            - Repository: ${{ github.repository }}
+            - Tag: ${{ github.ref_name }}
+            - Actor: ${{ github.actor }}
+            - Workflow: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          branch: chore/update-quanda-kb-pipeline-${{ steps.tag.outputs.VERSION }}
+          base: main
+
+      - name: Set PR URL for Slack
+        id: pr-info
+        run: |
+          if [ -n "${{ steps.create-pr.outputs.pull-request-url }}" ]; then
+            echo "url=${{ steps.create-pr.outputs.pull-request-url }}" >> $GITHUB_OUTPUT
+            echo "text=Review and Merge" >> $GITHUB_OUTPUT
+          else
+            echo "url=https://github.com/Quantit-Github/quanda_k8s_manifest/pulls" >> $GITHUB_OUTPUT
+            echo "text=View PRs" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Send Slack notification on success
+        if: success()
+        uses: slackapi/slack-github-action@v2
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
+          payload: |
+            {
+              "text": "✅ Deployment Successful",
+              "blocks": [
+                {
+                  "type": "header",
+                  "text": {
+                    "type": "plain_text",
+                    "text": "✅ Deployment Successful"
+                  }
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Repository:*\n${{ github.repository }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Tag:*\n${{ github.ref_name }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Triggered by:*\n${{ github.actor }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Workflow:*\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Run>"
+                    }
+                  ]
+                },
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*K8s Manifest PR:*\n<${{ steps.pr-info.outputs.url }}|${{ steps.pr-info.outputs.text }}>"
+                  }
+                }
+              ]
+            }
