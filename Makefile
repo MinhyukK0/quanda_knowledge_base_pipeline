@@ -1,11 +1,15 @@
-.PHONY: install run format lint check test clean docker-build docker-run
+.PHONY: install run run-api format lint check test clean docker-build docker-run kafka-up compose-up compose-down compact
 
 # 의존성 설치
 install:
 	uv sync --all-extras
 
-# 서버 실행
+# 전체 실행 (API + Kafka)
 run:
+	docker-compose up --build
+
+# API 서버만 실행 (로컬 개발)
+run-api:
 	uv run uvicorn src.main:app --reload --port 8000
 
 # 코드 포맷팅
@@ -45,4 +49,30 @@ docker-run:
 		-e AWS_REGION=ap-northeast-2 \
 		-e AWS_ACCESS_KEY_ID=$(AWS_ACCESS_KEY_ID) \
 		-e AWS_SECRET_ACCESS_KEY=$(AWS_SECRET_ACCESS_KEY) \
+		-e KAFKA_BOOTSTRAP_SERVERS=$(KAFKA_BOOTSTRAP_SERVERS) \
 		quanda-kb-pipeline
+
+# Kafka 로컬 실행 (Docker)
+kafka-up:
+	docker run -d --name quanda-kafka -p 9092:9092 apache/kafka:latest
+
+# Docker Compose 실행
+compose-up:
+	docker-compose up -d
+
+# Docker Compose 종료
+compose-down:
+	docker-compose down
+
+# 수동 compact 이벤트 발행
+compact:
+	uv run python -c "\
+import asyncio; \
+from src.conf.kafka import broker; \
+from src.schema.v1.compact_event import CompactEvent; \
+from src.conf.settings import settings; \
+async def main(): \
+    await broker.start(); \
+    await broker.publish(CompactEvent(trigger='manual'), topic=settings.kafka_topic_compact); \
+    await broker.stop(); \
+asyncio.run(main())"

@@ -77,9 +77,13 @@ class S3Service:
         for key, value in metadata.items():
             if isinstance(value, list):
                 # 배열은 쉼표로 구분된 문자열로 변환
-                attributes[key] = ",".join(str(v) for v in value)
+                str_value = ",".join(str(v) for v in value)
             else:
-                attributes[key] = str(value)
+                str_value = str(value)
+
+            # 빈 문자열은 Bedrock KB에서 허용되지 않으므로 건너뛰기
+            if str_value:
+                attributes[key] = str_value
 
         # source_type, created_at 추가
         attributes["source_type"] = source_type
@@ -151,3 +155,74 @@ class S3Service:
             "file": file_result,
             "metadata": metadata_result,
         }
+
+    def list_documents(self, prefix: str) -> list[dict]:
+        """S3에서 문서 목록 조회
+
+        Args:
+            prefix: S3 키 프리픽스
+
+        Returns:
+            문서 정보 리스트 [{key, size, last_modified}, ...]
+        """
+        documents = []
+        paginator = self.client.get_paginator("list_objects_v2")
+
+        try:
+            for page in paginator.paginate(Bucket=self.bucket, Prefix=prefix):
+                for obj in page.get("Contents", []):
+                    documents.append(
+                        {
+                            "key": obj["Key"],
+                            "size": obj["Size"],
+                            "last_modified": obj["LastModified"].isoformat(),
+                        }
+                    )
+        except ClientError:
+            return []
+
+        return documents
+
+    def get_document(self, key: str) -> bytes:
+        """S3에서 문서 내용 조회
+
+        Args:
+            key: S3 객체 키
+
+        Returns:
+            문서 내용 (bytes)
+
+        Raises:
+            ClientError: S3 조회 실패 시
+        """
+        response = self.client.get_object(Bucket=self.bucket, Key=key)
+        return response["Body"].read()
+
+    def delete_objects(self, keys: list[str]) -> dict:
+        """S3에서 여러 객체 삭제
+
+        Args:
+            keys: 삭제할 S3 객체 키 리스트
+
+        Returns:
+            {success, deleted, errors}
+        """
+        if not keys:
+            return {"success": True, "deleted": [], "errors": []}
+
+        try:
+            response = self.client.delete_objects(
+                Bucket=self.bucket,
+                Delete={"Objects": [{"Key": key} for key in keys]},
+            )
+            return {
+                "success": True,
+                "deleted": [d["Key"] for d in response.get("Deleted", [])],
+                "errors": response.get("Errors", []),
+            }
+        except ClientError as e:
+            return {
+                "success": False,
+                "deleted": [],
+                "errors": [str(e)],
+            }

@@ -5,9 +5,9 @@ from fastapi import APIRouter, Depends, File, UploadFile
 
 from src.conf.container import Container
 from src.conf.settings import settings
-from src.services.agent import AgentService
-from src.services.bedrock import BedrockKBService
-from src.services.s3 import S3Service
+from src.external_service.agent import AgentService
+from src.external_service.bedrock import BedrockKBService
+from src.external_service.s3 import S3Service
 
 router = APIRouter()
 
