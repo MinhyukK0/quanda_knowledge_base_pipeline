@@ -13,7 +13,6 @@ class Container(containers.DeclarativeContainer):
     wiring_config = containers.WiringConfiguration(
         modules=[
             "src.api.v1.upload",
-            "src.events.v1.compact",
         ]
     )
 

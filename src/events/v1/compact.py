@@ -2,27 +2,21 @@
 
 import logging
 
-from dependency_injector.wiring import Provide, inject
-
 from src.conf.container import Container
 from src.conf.kafka import broker
 from src.conf.settings import settings
 from src.schema.v1.compact_event import CompactEvent, CompactResult
-from src.services.compact import CompactService
 
 logger = logging.getLogger(__name__)
 
 
 @broker.subscriber(settings.kafka_topic_compact, group_id=settings.kafka_consumer_group)
-@inject
-async def handle_compact(
-    event: CompactEvent,
-    compact_service: CompactService = Provide[Container.compact_service],
-) -> CompactResult:
+async def handle_compact(event: CompactEvent) -> CompactResult:
     """Compact 이벤트 처리"""
     logger.info(f"Received compact event: trigger={event.trigger}")
 
     try:
+        compact_service = Container.compact_service()
         result = await compact_service.run()
         logger.info(f"Compact completed: {result}")
         return CompactResult(**result)
