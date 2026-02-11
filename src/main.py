@@ -1,3 +1,4 @@
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -5,7 +6,10 @@ from fastapi import FastAPI
 import src.events  # noqa: F401 - 핸들러 등록
 from src.api import api_router
 from src.conf.container import create_container
-from src.conf.kafka import broker
+from src.conf.kafka import broker, ensure_topics
+from src.conf.settings import settings
+
+logger = logging.getLogger(__name__)
 
 container = create_container()
 
@@ -13,6 +17,7 @@ container = create_container()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """FastAPI 라이프사이클 관리"""
+    await ensure_topics(settings.kafka_topics)
     await broker.start()
     yield
     await broker.stop()

@@ -40,5 +40,10 @@ class AppSettings(BaseSettings):
     kafka_topic_compact: str = "knowledge-base.compact"
     kafka_consumer_group: str = "quanda-kb-pipeline"
 
+    @property
+    def kafka_topics(self) -> list[str]:
+        """등록된 모든 Kafka 토픽 목록"""
+        return [self.kafka_topic_compact]
+
 
 settings = AppSettings()
