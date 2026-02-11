@@ -21,7 +21,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Quanda Knowledge Base Pipeline",
     description="파일 업로드, Claude Agent 메타데이터 생성, S3 업로드 및 Bedrock KB 동기화",
-    version="0.1.0",
+    version="0.1.4",
     lifespan=lifespan,
 )
 
@@ -31,4 +31,4 @@ app.include_router(api_router)
 
 @app.get("/health")
 async def health_check():
-    return {"status": "healthy"}
+    return {"status": "healthy", "version": app.version}
