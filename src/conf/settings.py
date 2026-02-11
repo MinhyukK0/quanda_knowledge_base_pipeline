@@ -41,5 +41,4 @@ class AppSettings(BaseSettings):
     kafka_consumer_group: str = "quanda-kb-pipeline"
 
 
-
 settings = AppSettings()
