@@ -1,9 +1,10 @@
 from dependency_injector import containers, providers
 
 from src.conf.settings import settings
-from src.services.agent import AgentService
-from src.services.bedrock import BedrockKBService
-from src.services.s3 import S3Service
+from src.external_service.agent import AgentService
+from src.external_service.bedrock import BedrockKBService
+from src.external_service.s3 import S3Service
+from src.services.compact import CompactService
 
 
 class Container(containers.DeclarativeContainer):
@@ -12,10 +13,11 @@ class Container(containers.DeclarativeContainer):
     wiring_config = containers.WiringConfiguration(
         modules=[
             "src.api.v1.upload",
+            "src.events.v1.compact",
         ]
     )
 
-    # Services
+    # External Services
     agent_service = providers.Singleton(
         AgentService,
         system_prompt="You are a document analysis assistant. Analyze files and extract metadata.",
@@ -40,6 +42,14 @@ class Container(containers.DeclarativeContainer):
         region=settings.aws_region,
         aws_access_key_id=settings.aws_access_key_id,
         aws_secret_access_key=settings.aws_secret_access_key,
+    )
+
+    # Services
+    compact_service = providers.Singleton(
+        CompactService,
+        s3_service=s3_service,
+        bedrock_kb_service=bedrock_kb_service,
+        agent_service=agent_service,
     )
 
 
