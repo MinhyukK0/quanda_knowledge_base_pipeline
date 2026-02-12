@@ -13,11 +13,11 @@ logger = logging.getLogger(__name__)
 @broker.subscriber(settings.kafka_topic_compact, group_id=settings.kafka_consumer_group)
 async def handle_compact(event: CompactEvent) -> CompactResult:
     """Compact 이벤트 처리"""
-    logger.info(f"Received compact event: trigger={event.trigger}")
+    logger.info(f"Received compact event: trigger={event.trigger}, dry_run={event.dry_run}")
 
     try:
         compact_service = Container.compact_service()
-        result = await compact_service.run()
+        result = await compact_service.run(dry_run=event.dry_run)
         logger.info(f"Compact completed: {result}")
         return CompactResult(**result)
     except Exception as e:
