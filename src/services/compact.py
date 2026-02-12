@@ -65,11 +65,11 @@ class CompactService:
 
     async def run(self) -> dict:
         """Compact 실행"""
-        prefix = settings.s3_base_prefix
-
-        # 1. S3에서 문서 로드
-        logger.info(f"Loading documents from s3://{settings.s3_bucket}/{prefix}")
-        documents = self._load_documents(prefix)
+        # 1. S3에서 문서 로드 (원본 + 기존 compact 문서)
+        documents = []
+        for prefix in [settings.s3_base_prefix, settings.s3_compact_prefix]:
+            logger.info(f"Loading documents from s3://{settings.s3_bucket}/{prefix}")
+            documents.extend(self._load_documents(prefix))
 
         if not documents:
             logger.info("No documents found")
