@@ -8,8 +8,8 @@ router = APIRouter()
 
 
 @router.post("/compact")
-async def publish_compact():
+async def publish_compact(dry_run: bool = False):
     """Compact 이벤트 발행"""
-    event = CompactEvent(trigger="api")
+    event = CompactEvent(trigger="api", dry_run=dry_run)
     await broker.publish(event, topic=settings.kafka_topic_compact)
     return {"success": True, "event": event.model_dump(mode="json")}

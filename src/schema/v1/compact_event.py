@@ -11,6 +11,7 @@ class CompactEvent(BaseModel):
     """문서 정리 이벤트"""
 
     trigger: str = Field(default="scheduled", description="scheduled|manual|api")
+    dry_run: bool = Field(default=False, description="True면 분석만 수행, 업로드/삭제 건너뜀")
     timestamp: datetime = Field(default_factory=utc_now)
 
 

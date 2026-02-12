@@ -24,7 +24,7 @@ def mock_compact_services():
 
     # Agent 서비스 모킹
     mock_agent = MagicMock()
-    mock_agent.find_similar_documents = AsyncMock(return_value=[])
+    mock_agent.find_similar_documents = AsyncMock(return_value={"delete": [], "groups": []})
     mock_agent.merge_documents = AsyncMock(
         return_value={
             "content": "merged content",
@@ -79,7 +79,10 @@ class TestCompactServiceSingleDocument:
         mock_compact_services["s3"].list_documents.return_value = [
             {"key": "knowledge-base/doc1/uuid1/file1.md", "size": 100, "last_modified": "2024-01-01T00:00:00Z"}
         ]
-        mock_compact_services["agent"].find_similar_documents.return_value = [["knowledge-base/doc1/uuid1/file1.md"]]
+        mock_compact_services["agent"].find_similar_documents.return_value = {
+            "delete": [],
+            "groups": [["knowledge-base/doc1/uuid1/file1.md"]],
+        }
 
         result = await compact_service.run()
 
@@ -120,9 +123,10 @@ class TestCompactServiceMerge:
         mock_compact_services["s3"].get_document.side_effect = get_document_side_effect
 
         # 유사 문서 그룹
-        mock_compact_services["agent"].find_similar_documents.return_value = [
-            ["knowledge-base/doc1/uuid1/file1.md", "knowledge-base/doc2/uuid2/file2.md"]
-        ]
+        mock_compact_services["agent"].find_similar_documents.return_value = {
+            "delete": [],
+            "groups": [["knowledge-base/doc1/uuid1/file1.md", "knowledge-base/doc2/uuid2/file2.md"]],
+        }
 
         # 병합 결과
         mock_compact_services["agent"].merge_documents.return_value = {
@@ -183,10 +187,10 @@ class TestCompactServiceMultipleGroups:
         mock_compact_services["s3"].get_document.return_value = b"content"
 
         # 첫 번째 그룹만 2개 이상
-        mock_compact_services["agent"].find_similar_documents.return_value = [
-            ["kb/g1/doc1.md", "kb/g1/doc2.md"],
-            ["kb/g2/doc3.md"],  # 단독 그룹
-        ]
+        mock_compact_services["agent"].find_similar_documents.return_value = {
+            "delete": [],
+            "groups": [["kb/g1/doc1.md", "kb/g1/doc2.md"], ["kb/g2/doc3.md"]],
+        }
 
         mock_compact_services["s3"].delete_objects.return_value = {
             "success": True,
@@ -219,10 +223,10 @@ class TestCompactServiceError:
         ]
         mock_compact_services["s3"].get_document.return_value = b"content"
 
-        mock_compact_services["agent"].find_similar_documents.return_value = [
-            ["kb/doc1.md", "kb/doc2.md"],
-            ["kb/doc3.md", "kb/doc4.md"],
-        ]
+        mock_compact_services["agent"].find_similar_documents.return_value = {
+            "delete": [],
+            "groups": [["kb/doc1.md", "kb/doc2.md"], ["kb/doc3.md", "kb/doc4.md"]],
+        }
 
         # 첫 번째 업로드 실패, 두 번째 성공
         mock_compact_services["s3"].upload_file_with_metadata.side_effect = [

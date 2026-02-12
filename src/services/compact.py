@@ -63,8 +63,12 @@ class CompactService:
 
         return documents
 
-    async def run(self) -> dict:
-        """Compact 실행"""
+    async def run(self, dry_run: bool = False) -> dict:
+        """Compact 실행
+
+        Args:
+            dry_run: True면 분석/병합만 수행하고 업로드/삭제/동기화는 건너뜀
+        """
         # 1. S3에서 문서 로드 (원본 + 기존 compact 문서)
         documents = []
         for prefix in [settings.s3_base_prefix, settings.s3_compact_prefix]:
@@ -77,9 +81,11 @@ class CompactService:
 
         logger.info(f"Found {len(documents)} documents")
 
-        # 2. Claude로 유사 문서 그룹 분석
+        # 2. Claude로 유사 문서 그룹 분석 + 가치 없는 문서 필터링
         logger.info("Analyzing document similarity...")
-        groups = await self._agent.find_similar_documents(documents)
+        analysis = await self._agent.find_similar_documents(documents)
+        trash_keys = analysis.get("delete", [])
+        groups = analysis.get("groups", [])
 
         # key -> document 매핑
         doc_map = {doc["key"]: doc for doc in documents}
@@ -87,6 +93,23 @@ class CompactService:
         merged_count = 0
         deleted_count = 0
         deleted_keys = []
+
+        # 2-1. 가치 없는 문서 삭제
+        if trash_keys:
+            logger.info(f"Removing {len(trash_keys)} low-value documents: {trash_keys}")
+            keys_to_delete = []
+            for key in trash_keys:
+                keys_to_delete.append(key)
+                keys_to_delete.append(f"{key}.metadata.json")
+
+            if dry_run:
+                logger.info(f"[DRY RUN] Would delete low-value: {trash_keys}")
+                deleted_keys.extend(keys_to_delete)
+                deleted_count += len(keys_to_delete)
+            elif keys_to_delete:
+                delete_result = self._s3.delete_objects(keys_to_delete)
+                deleted_count += len(delete_result.get("deleted", []))
+                deleted_keys.extend(delete_result.get("deleted", []))
 
         # 3. 각 그룹 처리
         for group in groups:
@@ -101,6 +124,16 @@ class CompactService:
 
             # 4. Claude로 문서 병합
             merged = await self._agent.merge_documents(group_docs)
+
+            if dry_run:
+                dest = f"{settings.s3_compact_prefix}/{merged['directory']}/{merged['filename']}"
+                logger.info(f"[DRY RUN] Would upload to: {dest}")
+                logger.info(f"[DRY RUN] Would delete: {group}")
+                merged_count += 1
+                for key in group:
+                    deleted_keys.extend([key, f"{key}.metadata.json"])
+                deleted_count += len(group) * 2
+                continue
 
             # 5. 병합된 문서를 compact prefix에 업로드
             output_directory = f"{settings.s3_compact_prefix}/{merged['directory']}"
@@ -134,7 +167,7 @@ class CompactService:
                 deleted_keys.extend(delete_result.get("deleted", []))
 
         # 7. Bedrock KB 동기화
-        if merged_count > 0:
+        if merged_count > 0 and not dry_run:
             logger.info("Starting Bedrock KB sync...")
             sync_result = await self._bedrock.start_sync()
             if sync_result.get("success"):
@@ -142,8 +175,9 @@ class CompactService:
             else:
                 logger.error(f"KB sync failed: {sync_result.get('error')}")
 
+        status = "dry_run" if dry_run else "completed"
         return {
-            "status": "completed",
+            "status": status,
             "merged": merged_count,
             "deleted": deleted_count,
             "deleted_keys": deleted_keys,

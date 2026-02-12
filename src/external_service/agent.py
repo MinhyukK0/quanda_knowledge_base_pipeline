@@ -164,7 +164,17 @@ class AgentService:
         docs_text = "\n\n".join(doc_entries)
 
         prompt = dedent(f"""
-            다음 문서들을 분석하여 **정말로 중복되거나 동일한 내용**인 문서만 그룹으로 묶어주세요.
+            다음 문서들을 분석하여 두 가지 작업을 수행하세요:
+
+            ## 1단계: 가치 없는 문서 제거
+            아래에 해당하는 문서는 "DELETE" 그룹에 넣으세요:
+            - 단순 인사/안부 세션 (hi, hello, 안녕 등 실질적 내용 없음)
+            - 오류/실패만 기록된 세션 (유의미한 결과 없음)
+            - 테스트/디버그 목적의 일회성 세션
+            - 빈 내용이거나 의미 있는 정보가 전혀 없는 문서
+
+            ## 2단계: 유사 문서 그룹핑
+            나머지 문서 중 **정말로 중복되거나 동일한 내용**인 문서만 그룹으로 묶으세요.
 
             병합 기준 (모두 충족해야 함):
             - 동일한 특정 주제를 다룸 (일반적인 주제 공유는 불충분)
@@ -181,23 +191,31 @@ class AgentService:
             문서들:
             {docs_text}
 
-            JSON 형식으로 그룹을 반환해주세요 (다른 텍스트 없이):
-            [["key1", "key2"], ["key3"], ...]
+            JSON 형식으로 반환해주세요 (다른 텍스트 없이):
+            {{
+                "delete": ["삭제할key1", "삭제할key2"],
+                "groups": [["key1", "key2"], ["key3"], ...]
+            }}
 
-            주의: 모든 문서 키는 반드시 하나의 그룹에만 포함되어야 합니다.
+            주의:
+            - delete에 포함된 키는 groups에 넣지 마세요.
+            - 나머지 모든 문서 키는 반드시 groups의 하나의 그룹에만 포함되어야 합니다.
         """).strip()
 
         response = await self.query_text(prompt, max_turns=1)
 
         try:
-            groups = self._extract_json(response)
-            if isinstance(groups, list) and all(isinstance(g, list) for g in groups):
-                return groups
+            result = self._extract_json(response)
+            if isinstance(result, dict):
+                delete_keys = result.get("delete", [])
+                groups = result.get("groups", [])
+                if isinstance(groups, list) and all(isinstance(g, list) for g in groups):
+                    return {"delete": delete_keys, "groups": groups}
         except Exception:
             pass
 
         # 파싱 실패 시 각 문서를 개별 그룹으로
-        return [[doc["key"]] for doc in documents]
+        return {"delete": [], "groups": [[doc["key"]] for doc in documents]}
 
     async def merge_documents(
         self,
